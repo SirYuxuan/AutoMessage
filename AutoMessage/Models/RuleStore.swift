@@ -33,9 +33,11 @@ class RuleStore: ObservableObject {
         }
     }
     
-    private func saveRules() {
+    func saveRules() {
         if let encoded = try? JSONEncoder().encode(rules) {
             UserDefaults.standard.set(encoded, forKey: saveKey)
+            // 发送通知
+            NotificationCenter.default.post(name: NSNotification.Name("RulesUpdated"), object: nil)
         }
     }
 } 

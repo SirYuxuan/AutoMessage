@@ -4,18 +4,21 @@ import UserNotifications
 import AppKit
 
 class MessageMonitor: ObservableObject {
+    static let shared = MessageMonitor()
+    
     @Published var messages: [MessageItem] = []
     private var database: OpaquePointer?
     private var lastMessageId: Int64 = 0
     private var timer: Timer?
-    private var ruleStore: RuleStore?
-    private var autoPasteSettings: AutoPasteSettings?
+    private var ruleStore: RuleStore = RuleStore()
+    private var autoPasteSettings: AutoPasteSettings = AutoPasteSettings()
     
-    init() {
+    private init() {
         openDatabase()
     }
     
     func updateDependencies(ruleStore: RuleStore, autoPasteSettings: AutoPasteSettings) {
+        print("更新依赖 - RuleStore: \(ruleStore), AutoPasteSettings: \(autoPasteSettings)")
         self.ruleStore = ruleStore
         self.autoPasteSettings = autoPasteSettings
     }
@@ -48,7 +51,7 @@ class MessageMonitor: ObservableObject {
     
     private func loadLatestMessages() {
         let query = """
-            SELECT message.ROWID, message.text, message.date, message.is_from_me
+            SELECT message.ROWID, message.text, message.date/1000000000 + 978307200, message.is_from_me
             FROM message
             WHERE message.text IS NOT NULL
             ORDER BY message.date DESC
@@ -61,20 +64,22 @@ class MessageMonitor: ObservableObject {
             
             while sqlite3_step(statement) == SQLITE_ROW {
                 let id = sqlite3_column_int64(statement, 0)
-                let text = String(cString: sqlite3_column_text(statement, 1))
-                let date = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_double(statement, 2)))
-                let isFromMe = sqlite3_column_int(statement, 3) != 0
-                
-                let message = MessageItem(
-                    id: id,
-                    text: text,
-                    date: date,
-                    isFromMe: isFromMe
-                )
-                newMessages.append(message)
-                
-                if id > lastMessageId {
-                    lastMessageId = id
+                if let textData = sqlite3_column_text(statement, 1) {
+                    let text = String(cString: textData)
+                    let date = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_double(statement, 2)))
+                    let isFromMe = sqlite3_column_int(statement, 3) != 0
+                    
+                    let message = MessageItem(
+                        id: id,
+                        text: text,
+                        date: date,
+                        isFromMe: isFromMe
+                    )
+                    newMessages.append(message)
+                    
+                    if id > lastMessageId {
+                        lastMessageId = id
+                    }
                 }
             }
             
@@ -87,28 +92,47 @@ class MessageMonitor: ObservableObject {
     }
     
     private func processMessage(_ message: MessageItem) {
-        guard let ruleStore = ruleStore,
-              let autoPasteSettings = autoPasteSettings else { return }
+        print("开始处理消息: \(message.text)")
         
         // 只处理接收到的消息
-        guard !message.isFromMe else { return }
+        guard !message.isFromMe else {
+            print("跳过自己发送的消息")
+            return
+        }
+        
+        print("正在检查 \(ruleStore.rules.count) 条规则")
         
         // 遍历所有启用的规则
         for rule in ruleStore.rules where rule.isEnabled {
+            print("检查规则: \(rule.name), 模式: \(rule.pattern)")
             if let regex = try? NSRegularExpression(pattern: rule.pattern) {
                 let range = NSRange(message.text.startIndex..<message.text.endIndex, in: message.text)
                 if let match = regex.firstMatch(in: message.text, range: range) {
                     let matchedString = (message.text as NSString).substring(with: match.range)
+                    print("找到匹配: \(matchedString)")
+                    
+                    // 记录日志
+                    print("正在记录日志...")
+                    DispatchQueue.main.async {
+                        print("添加日志到 LogStore...")
+                        LogStore.shared.addLog(LogEntry(code: matchedString, message: message.text, ruleName: rule.name))
+                        print("日志添加完成")
+                    }
                     
                     // 复制验证码到剪贴板
-                    let pasteboard = NSPasteboard.general
-                    pasteboard.clearContents()
-                    pasteboard.setString(matchedString, forType: .string)
+                    print("正在复制到剪贴板...")
+                    DispatchQueue.main.async {
+                        let pasteboard = NSPasteboard.general
+                        pasteboard.clearContents()
+                        pasteboard.setString(matchedString, forType: .string)
+                        print("验证码已复制到剪贴板")
+                    }
                     
                     // 发送通知
+                    print("正在发送通知...")
                     sendNotification(code: matchedString)
                     
-                    // 如果启用了自动粘贴，执行粘贴操作
+                    // 如果启用自动粘贴，执行粘贴操作
                     if autoPasteSettings.isEnabled {
                         print("自动粘贴已启用，延时：\(autoPasteSettings.delay)秒")
                         DispatchQueue.main.asyncAfter(deadline: .now() + autoPasteSettings.delay) {
@@ -127,16 +151,28 @@ class MessageMonitor: ObservableObject {
                     DispatchQueue.main.async {
                         if let index = self.messages.firstIndex(where: { $0.id == message.id }) {
                             self.messages[index] = updatedMessage
+                            print("消息列表已更新")
                         }
                     }
                     
+                    print("消息处理完成")
                     break // 找到第一个匹配就停止
+                } else {
+                    print("未找到匹配")
                 }
+            } else {
+                print("正则表达式编译失败: \(rule.pattern)")
             }
         }
     }
     
     private func sendNotification(code: String) {
+        // 检查是否启用了通知
+        guard GeneralSettings.shared.showNotification else {
+            print("通知已禁用，跳过发送通知")
+            return
+        }
+        
         let content = UNMutableNotificationContent()
         content.title = "收到验证码"
         content.body = "验证码：\(code)"
@@ -149,11 +185,13 @@ class MessageMonitor: ObservableObject {
         )
         
         UNUserNotificationCenter.current().add(request)
+        print("已发送通知")
     }
     
     private func checkNewMessages() {
+        print("开始检查新消息...")
         let query = """
-            SELECT message.ROWID, message.text, message.date, message.is_from_me
+            SELECT message.ROWID, message.text, message.date/1000000000 + 978307200, message.is_from_me
             FROM message
             WHERE message.ROWID > ? AND message.text IS NOT NULL
             ORDER BY message.date DESC
@@ -161,36 +199,49 @@ class MessageMonitor: ObservableObject {
         
         var statement: OpaquePointer?
         if sqlite3_prepare_v2(database, query, -1, &statement, nil) == SQLITE_OK {
+            print("SQL 查询准备成功")
             sqlite3_bind_int64(statement, 1, lastMessageId)
             
             var newMessages: [MessageItem] = []
             while sqlite3_step(statement) == SQLITE_ROW {
                 let id = sqlite3_column_int64(statement, 0)
-                let text = String(cString: sqlite3_column_text(statement, 1))
-                let date = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_double(statement, 2)))
-                let isFromMe = sqlite3_column_int(statement, 3) != 0
-                
-                let message = MessageItem(
-                    id: id,
-                    text: text,
-                    date: date,
-                    isFromMe: isFromMe
-                )
-                newMessages.append(message)
-                
-                // 处理新消息
-                processMessage(message)
-                
-                if id > lastMessageId {
-                    lastMessageId = id
+                if let textData = sqlite3_column_text(statement, 1) {
+                    let text = String(cString: textData)
+                    let date = Date(timeIntervalSince1970: TimeInterval(sqlite3_column_double(statement, 2)))
+                    let isFromMe = sqlite3_column_int(statement, 3) != 0
+                    
+                    print("发现新消息: ID=\(id), Text=\(text), Date=\(date), IsFromMe=\(isFromMe)")
+                    
+                    let message = MessageItem(
+                        id: id,
+                        text: text,
+                        date: date,
+                        isFromMe: isFromMe
+                    )
+                    newMessages.append(message)
+                    
+                    // 处理新消息
+                    processMessage(message)
+                    
+                    if id > lastMessageId {
+                        lastMessageId = id
+                        print("更新最后消息ID为: \(lastMessageId)")
+                    }
                 }
             }
             
             if !newMessages.isEmpty {
+                print("发现 \(newMessages.count) 条新消息")
                 DispatchQueue.main.async {
                     self.messages.insert(contentsOf: newMessages, at: 0)
                 }
+            } else {
+                print("没有发现新消息")
             }
+        } else {
+            print("SQL 查询准备失败")
+            let errorMessage = String(cString: sqlite3_errmsg(database))
+            print("SQL错误: \(errorMessage)")
         }
         
         sqlite3_finalize(statement)
@@ -223,8 +274,8 @@ class MessageMonitor: ObservableObject {
         vUp?.post(tap: loc)
         cmdUp?.post(tap: loc)
         
-        // 如果启用了自动回���
-        if autoPasteSettings?.autoEnter ?? false {
+        // 如果启用了自动回车
+        if autoPasteSettings.autoEnter {
             // 等待一小段时间再按回车
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 // 回车键按下

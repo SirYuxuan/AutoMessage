@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct RuleConfigView: View {
-    @StateObject private var ruleStore = RuleStore()
+    @EnvironmentObject var ruleStore: RuleStore
     @State private var selectedRule: Rule?
     @State private var isCreatingNewRule = false
     @State private var testMessage = ""
@@ -112,24 +112,40 @@ struct RuleConfigView: View {
 
 // 规则列表项视图
 struct RuleListItem: View {
+    @EnvironmentObject var ruleStore: RuleStore
+    @State private var isEnabled: Bool
     let rule: Rule
+    
+    init(rule: Rule) {
+        self.rule = rule
+        self._isEnabled = State(initialValue: rule.isEnabled)
+    }
     
     var body: some View {
         HStack(spacing: 12) {
             // 状态指示点
-            Circle()
-                .fill(rule.isEnabled ? Color.green : Color.red.opacity(0.7))
-                .frame(width: 8, height: 8)
-                .overlay(
-                    Circle()
-                        .stroke(rule.isEnabled ? Color.green.opacity(0.3) : Color.red.opacity(0.3), lineWidth: 1)
-                )
-                .shadow(color: rule.isEnabled ? Color.green.opacity(0.3) : Color.red.opacity(0.2), radius: 2)
+            Button(action: {
+                if let index = ruleStore.rules.firstIndex(where: { $0.id == rule.id }) {
+                    isEnabled.toggle()
+                    ruleStore.rules[index].isEnabled = isEnabled
+                    ruleStore.saveRules()
+                }
+            }) {
+                Circle()
+                    .fill(isEnabled ? Color.green : Color.red.opacity(0.7))
+                    .frame(width: 8, height: 8)
+                    .overlay(
+                        Circle()
+                            .stroke(isEnabled ? Color.green.opacity(0.3) : Color.red.opacity(0.3), lineWidth: 1)
+                    )
+                    .shadow(color: isEnabled ? Color.green.opacity(0.3) : Color.red.opacity(0.2), radius: 2)
+            }
+            .buttonStyle(PlainButtonStyle())
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(rule.name)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(rule.isEnabled ? .primary : .secondary)
+                    .foregroundColor(isEnabled ? .primary : .secondary)
                 Text(rule.pattern)
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
@@ -141,7 +157,13 @@ struct RuleListItem: View {
         .padding(.horizontal, 4)
         .background(Color.clear)
         .contentShape(Rectangle())
-        .opacity(rule.isEnabled ? 1 : 0.8)
+        .opacity(isEnabled ? 1 : 0.8)
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RulesUpdated"))) { _ in
+            // 当规则更新时，检查并更新本地状态
+            if let updatedRule = ruleStore.rules.first(where: { $0.id == rule.id }) {
+                isEnabled = updatedRule.isEnabled
+            }
+        }
     }
 }
 
@@ -174,14 +196,13 @@ struct RuleEditView: View {
                 
                 Spacer()
                 
-                HStack(spacing: 12) {
-                    if isNewRule {
-                        Button("取消") {
-                            onCancel?()
-                        }
-                        .buttonStyle(.bordered)
+                if isNewRule {
+                    Button("取消") {
+                        onCancel?()
                     }
-                    Button(isNewRule ? "创建" : "保存") {
+                    .buttonStyle(.bordered)
+                    
+                    Button("创建") {
                         onSave(editingRule)
                     }
                     .buttonStyle(.borderedProminent)

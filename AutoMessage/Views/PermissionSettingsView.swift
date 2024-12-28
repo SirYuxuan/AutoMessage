@@ -36,7 +36,7 @@ class PermissionManager: ObservableObject {
 
 struct PermissionSettingsView: View {
     @StateObject private var permissionManager = PermissionManager()
-    @StateObject private var launchAtLogin = LaunchAtLogin()
+    @StateObject private var settingsManager = SettingsManager.shared
     
     var body: some View {
         VStack(spacing: 0) {
@@ -95,8 +95,14 @@ struct PermissionSettingsView: View {
                                 Label("开机自启动", systemImage: "power")
                                     .font(.headline)
                                 Spacer()
-                                Toggle("", isOn: $launchAtLogin.isEnabled)
+                                Toggle("", isOn: $settingsManager.launchAtLogin)
                                     .toggleStyle(SwitchToggleStyle())
+                                    .onChange(of: settingsManager.launchAtLogin) { _ in
+                                        NotificationCenter.default.post(
+                                            name: NSNotification.Name("LaunchAtLoginChanged"),
+                                            object: nil
+                                        )
+                                    }
                             }
                             
                             Text("开启后，系统启动时会自动运行 AutoMessage")

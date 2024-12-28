@@ -4,11 +4,7 @@ struct MonitorView: View {
     @EnvironmentObject var ruleStore: RuleStore
     @EnvironmentObject var autoPasteSettings: AutoPasteSettings
     @EnvironmentObject var monitoringState: MonitoringState
-    @StateObject private var monitor: MessageMonitor
-    
-    init() {
-        _monitor = StateObject(wrappedValue: MessageMonitor())
-    }
+    @StateObject private var monitor = MessageMonitor.shared
     
     var body: some View {
         VStack(spacing: 0) {
@@ -144,18 +140,36 @@ struct MonitorView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
+            print("MonitorView appeared, updating dependencies...")
             monitor.updateDependencies(ruleStore: ruleStore, autoPasteSettings: autoPasteSettings)
             if monitoringState.isMonitoring {
+                print("Starting monitoring...")
                 monitor.startMonitoring()
             }
         }
+        .onChange(of: monitoringState.isMonitoring) { isMonitoring in
+            print("Monitoring state changed to: \(isMonitoring)")
+            monitor.updateDependencies(ruleStore: ruleStore, autoPasteSettings: autoPasteSettings)
+            if isMonitoring {
+                monitor.startMonitoring()
+            } else {
+                monitor.stopMonitoring()
+            }
+        }
+        .onChange(of: ruleStore.rules) { _ in
+            print("Rules changed, updating dependencies...")
+            monitor.updateDependencies(ruleStore: ruleStore, autoPasteSettings: autoPasteSettings)
+        }
         .onChange(of: autoPasteSettings.isEnabled) { _ in
+            print("AutoPaste settings changed, updating dependencies...")
             monitor.updateDependencies(ruleStore: ruleStore, autoPasteSettings: autoPasteSettings)
         }
         .onChange(of: autoPasteSettings.delay) { _ in
+            print("AutoPaste delay changed, updating dependencies...")
             monitor.updateDependencies(ruleStore: ruleStore, autoPasteSettings: autoPasteSettings)
         }
         .onChange(of: autoPasteSettings.autoEnter) { _ in
+            print("AutoPaste autoEnter changed, updating dependencies...")
             monitor.updateDependencies(ruleStore: ruleStore, autoPasteSettings: autoPasteSettings)
         }
         .onDisappear {

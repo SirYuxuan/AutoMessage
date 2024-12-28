@@ -17,6 +17,8 @@ struct MenuItem: Identifiable, Hashable {
         MenuItem(title: "监控状态", icon: "message.fill"),
         MenuItem(title: "规则配置", icon: "text.badge.checkmark"),
         MenuItem(title: "自动粘贴", icon: "doc.on.clipboard.fill"),
+        MenuItem(title: "验证码日志", icon: "list.bullet.rectangle.portrait"),
+        MenuItem(title: "通用设置", icon: "gearshape.fill"),
         MenuItem(title: "权限设置", icon: "lock.shield.fill"),
     ]
 }
@@ -130,6 +132,10 @@ struct ContentView: View {
             RuleConfigView()
         case "自动粘贴":
             AutoPasteView()
+        case "验证码日志":
+            LogView()
+        case "通用设置":
+            GeneralSettingsView()
         case "权限设置":
             PermissionSettingsView()
         default:
