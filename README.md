@@ -2,7 +2,7 @@
 # AutoMessage
 
 ![Version](https://img.shields.io/github/v/release/SirYuxuan/AutoMessage)
-![License](https://img.shields.io/github/license/SirYuxuan/AutoMessage)
+![License](https://img.shields.io/github/license/SirYuxuan/AutoMessage?cacheSeconds=7200)
 ![Platform](https://img.shields.io/badge/platform-macOS-blue)
 
 AutoMessage 是一款 macOS 应用，自动识别并填写验证码，提升您的工作效率。
