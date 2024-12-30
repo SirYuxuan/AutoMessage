@@ -19,9 +19,18 @@ jobs:
     
     - name: Build App
       run: |
+        # 显示工作目录
+        pwd
+        # 构建应用
         xcodebuild -scheme AutoMessage -configuration Release clean build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO
+        # 列出构建目录内容
+        ls -la
+        # 查找 .app 文件
+        find . -name "*.app"
+        # 创建目标目录
         mkdir -p build/AutoMessage
-        cp -r build/Release/AutoMessage.app build/AutoMessage/
+        # 复制应用（使用找到的实际路径）
+        cp -r ./DerivedData/AutoMessage/Build/Products/Release/AutoMessage.app build/AutoMessage/
     
     - name: Create ZIP
       run: |
