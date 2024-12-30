@@ -1,11 +1,9 @@
-name: Build and Package
+name: Release
 
 on:
   push:
-    branches: [ main ]
-    tags: [ 'v*' ]
-  pull_request:
-    branches: [ main ]
+    tags:
+      - 'v*'
 
 jobs:
   build:
@@ -21,24 +19,18 @@ jobs:
     
     - name: Build App
       run: |
-        xcodebuild -scheme AutoMessage -configuration Release clean build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO
+        xcodebuild -scheme AutoMessage -configuration Release clean archive -archivePath build/AutoMessage.xcarchive
+        xcodebuild -exportArchive -archivePath build/AutoMessage.xcarchive -exportPath build/AutoMessage -exportOptionsPlist exportOptions.plist
     
-    - name: Create DMG
+    - name: Create ZIP
       run: |
-        chmod +x scripts/create_dmg.sh
-        ./scripts/create_dmg.sh
-    
-    - name: Upload Artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: AutoMessage
-        path: build/AutoMessage.dmg
+        cd build/AutoMessage
+        zip -r ../AutoMessage.app.zip AutoMessage.app
     
     - name: Create Release
-      if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
-        files: build/AutoMessage.dmg
+        files: build/AutoMessage.app.zip
         draft: false
         prerelease: false
         generate_release_notes: true
