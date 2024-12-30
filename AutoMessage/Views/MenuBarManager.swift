@@ -164,7 +164,6 @@ class MenuBarManager: NSObject, NSWindowDelegate {
         window.center()
         
         // 设置窗口行为
-        window.level = .floating
         window.collectionBehavior = [.fullScreenAuxiliary]
         
         // 设置窗口代理来处理关闭事件
