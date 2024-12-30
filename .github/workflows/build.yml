@@ -19,8 +19,9 @@ jobs:
     
     - name: Build App
       run: |
-        xcodebuild -scheme AutoMessage -configuration Release clean archive -archivePath build/AutoMessage.xcarchive
-        xcodebuild -exportArchive -archivePath build/AutoMessage.xcarchive -exportPath build/AutoMessage -exportOptionsPlist exportOptions.plist
+        xcodebuild -scheme AutoMessage -configuration Release clean build CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO
+        mkdir -p build/AutoMessage
+        cp -r build/Release/AutoMessage.app build/AutoMessage/
     
     - name: Create ZIP
       run: |
